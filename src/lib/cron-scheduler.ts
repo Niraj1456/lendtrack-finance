@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { prisma } from './prisma';
 import { calculateMonthlyInterest, getDaysUntilDate, formatCurrency } from './calculator';
 
@@ -24,7 +23,7 @@ export async function runDailyReminderCheck(): Promise<ReminderRunResult> {
       notifications: {
         where: {
           sentAt: {
-            gte: todayMidnight, // Notifications recorded today
+            gte: todayMidnight,
           },
         },
       },
@@ -50,7 +49,7 @@ export async function runDailyReminderCheck(): Promise<ReminderRunResult> {
     const formattedAmount = formatCurrency(amountDue);
 
     if (daysUntilDue === 1) {
-      // 1 Day Before: "Payment of [Amount] due tomorrow for [Person Name]."
+      // 1 Day Before: "Payment of ₹[Amount] due tomorrow for [Person Name]."
       const message = `Payment of ${formattedAmount} due tomorrow for ${borrower.name}.`;
       result.dueTomorrow.push({
         id: borrower.id,
@@ -59,7 +58,6 @@ export async function runDailyReminderCheck(): Promise<ReminderRunResult> {
         message,
       });
 
-      // Prevent duplicate notification on the same day
       const alreadySent = borrower.notifications.some((n) => n.type === 'DUE_TOMORROW');
       if (!alreadySent) {
         await prisma.notificationLog.create({
@@ -73,7 +71,7 @@ export async function runDailyReminderCheck(): Promise<ReminderRunResult> {
         result.newNotificationsCreated++;
       }
     } else if (daysUntilDue === 0) {
-      // On the Due Date: "Payment of [Amount] is due TODAY for [Person Name]."
+      // On Due Date: "Payment of ₹[Amount] is due TODAY for [Person Name]."
       const message = `Payment of ${formattedAmount} is due TODAY for ${borrower.name}.`;
       result.dueToday.push({
         id: borrower.id,
@@ -82,7 +80,6 @@ export async function runDailyReminderCheck(): Promise<ReminderRunResult> {
         message,
       });
 
-      // Prevent duplicate notification on the same day
       const alreadySent = borrower.notifications.some((n) => n.type === 'DUE_TODAY');
       if (!alreadySent) {
         await prisma.notificationLog.create({
@@ -104,7 +101,6 @@ export async function runDailyReminderCheck(): Promise<ReminderRunResult> {
         daysOverdue,
       });
 
-      // Also log overdue alert once a day if not already logged today
       const alreadySent = borrower.notifications.some((n) => n.type === 'OVERDUE');
       if (!alreadySent) {
         await prisma.notificationLog.create({
@@ -124,24 +120,28 @@ export async function runDailyReminderCheck(): Promise<ReminderRunResult> {
   return result;
 }
 
-// Global flag to prevent multiple cron instances in dev hot-reloading
+// Global flag to prevent multiple cron instances
 const globalForCron = globalThis as unknown as { isCronInitialized?: boolean };
 
-export function initCronScheduler() {
-  if (globalForCron.isCronInitialized) {
+export async function initCronScheduler() {
+  if (globalForCron.isCronInitialized || typeof window !== 'undefined' || process.env.VERCEL) {
     return;
   }
 
-  // Schedule daily check at 08:00 AM every day
-  cron.schedule('0 8 * * *', async () => {
-    console.log('[CRON] 08:00 AM Daily Loan Payment Reminder Job Running...');
-    try {
-      await runDailyReminderCheck();
-    } catch (err) {
-      console.error('[CRON] Error during daily check:', err);
-    }
-  });
+  try {
+    const cron = (await import('node-cron')).default;
+    cron.schedule('0 8 * * *', async () => {
+      console.log('[CRON] 08:00 AM Daily Loan Payment Reminder Job Running...');
+      try {
+        await runDailyReminderCheck();
+      } catch (err) {
+        console.error('[CRON] Error during daily check:', err);
+      }
+    });
 
-  globalForCron.isCronInitialized = true;
-  console.log('[CRON] Loan Reminder Scheduler initialized (08:00 AM daily).');
+    globalForCron.isCronInitialized = true;
+    console.log('[CRON] Loan Reminder Scheduler initialized.');
+  } catch (e) {
+    // node-cron not available in serverless environment (use Vercel Cron instead)
+  }
 }
