@@ -13,9 +13,9 @@
 # production
 /build
 
-# local env files
+# local private env override files (optional local secrets)
+.env.local
 .env*.local
-.env
 
 # vercel
 .vercel
