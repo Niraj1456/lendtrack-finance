@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateMonthlyInterest, calculateEndDate } from '@/lib/calculator';
 
+export const dynamic = 'force-dynamic';
+
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
@@ -49,7 +51,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const startDate = body.startDate ? new Date(body.startDate) : existing.startDate;
     const nextPaymentDate = body.nextPaymentDate ? new Date(body.nextPaymentDate) : existing.nextPaymentDate;
 
-    // Recalculate monthly interest if principal, rate, or rateType changed
     const monthlyInterest = calculateMonthlyInterest(principalAmount, interestRate, rateType);
     const endDate = calculateEndDate(startDate, durationMonths);
 

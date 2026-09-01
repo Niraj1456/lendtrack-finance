@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateMonthlyInterest } from '@/lib/calculator';
 
+export const dynamic = 'force-dynamic';
+
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
@@ -22,23 +24,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Invalid payment amount' }, { status: 400 });
     }
 
-    // 1. Create Payment Record
     const payment = await prisma.payment.create({
       data: {
         borrowerId: id,
         amount: parsedAmount,
         paymentType,
-        notes: notes ? notes.trim() : `Payment of $${parsedAmount} received (${paymentType})`,
+        notes: notes ? notes.trim() : `Payment of ₹${parsedAmount} received (${paymentType})`,
       },
     });
 
-    // 2. Adjust Borrower nextPaymentDate or Principal
     let newPrincipal = borrower.principalAmount;
     let newStatus = borrower.status;
     let nextDate = new Date(borrower.nextPaymentDate);
 
     if (paymentType === 'INTEREST') {
-      // Advance next payment date by 1 month
       nextDate.setMonth(nextDate.getMonth() + 1);
     } else if (paymentType === 'PRINCIPAL') {
       newPrincipal = Math.max(0, borrower.principalAmount - parsedAmount);
@@ -46,14 +45,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
         newStatus = 'Completed';
       }
     } else if (paymentType === 'BOTH') {
-      // Advance next payment date by 1 month
       nextDate.setMonth(nextDate.getMonth() + 1);
     }
 
     const newMonthlyInterest = calculateMonthlyInterest(newPrincipal, borrower.interestRate, borrower.rateType);
 
     const updatedRemarks = notes
-      ? `${borrower.remarks ? borrower.remarks + '\n' : ''}[${new Date().toLocaleDateString()}]: Received ${paymentType} payment of $${parsedAmount}. ${notes}`
+      ? `${borrower.remarks ? borrower.remarks + '\n' : ''}[${new Date().toLocaleDateString('en-IN')}]: Received ${paymentType} payment of ₹${parsedAmount}. ${notes}`
       : borrower.remarks;
 
     const updatedBorrower = await prisma.borrower.update({

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { calculateMonthlyInterest, calculateEndDate } from '@/lib/calculator';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -63,7 +65,6 @@ export async function POST(request: NextRequest) {
       status = 'Active',
     } = body;
 
-    // Validate mandatory fields (Name, Phone, Principal Amount, Interest Rate, Duration are required. Email is optional!)
     if (!name || !phone || principalAmount == null || interestRate == null || !durationMonths) {
       return NextResponse.json(
         { error: 'Missing mandatory fields: Name, Phone, Principal Amount, Interest Rate, and Duration are required.' },
@@ -76,10 +77,8 @@ export async function POST(request: NextRequest) {
     const parsedDuration = parseInt(durationMonths, 10);
     const parsedStartDate = startDate ? new Date(startDate) : new Date();
 
-    // Auto-calculate monthly interest in INR
     const monthlyInterest = calculateMonthlyInterest(parsedPrincipal, parsedRate, rateType);
 
-    // Compute nextPaymentDate if not provided (default to 1 month from start date)
     let parsedNextPaymentDate: Date;
     if (nextPaymentDate) {
       parsedNextPaymentDate = new Date(nextPaymentDate);
@@ -88,7 +87,6 @@ export async function POST(request: NextRequest) {
       parsedNextPaymentDate.setMonth(parsedNextPaymentDate.getMonth() + 1);
     }
 
-    // Compute estimated end date
     const endDate = calculateEndDate(parsedStartDate, parsedDuration);
 
     const borrower = await prisma.borrower.create({
