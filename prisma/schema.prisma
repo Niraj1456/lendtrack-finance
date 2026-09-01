@@ -1,0 +1,53 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Borrower {
+  id                  String            @id @default(cuid())
+  name                String
+  phone               String
+  email               String?           // Optional email
+  address             String?           // Borrower residential / business address
+  reference           String?           // Reference contacts / guarantor details
+  principalAmount     Float             // Total initial loan amount (Principal in ₹)
+  interestRate        Float             // Interest rate percentage (e.g., 2% monthly or 18% annual)
+  rateType            String            @default("MONTHLY") // "MONTHLY" | "ANNUAL"
+  monthlyInterest     Float             // Auto-calculated monthly interest owed (in ₹)
+  durationMonths      Int               // Duration in months
+  startDate           DateTime          @default(now())
+  nextPaymentDate     DateTime          // Next monthly cycle due date
+  endDate             DateTime?         // Expected loan completion date
+  remarks             String?           // Notes (e.g. "Partial payment made", "Requested extension")
+  status              String            @default("Active") // "Active" | "Completed" | "Defaulted"
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  payments            Payment[]
+  notifications       NotificationLog[]
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  borrowerId  String
+  borrower    Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  amount      Float
+  paymentType String   @default("INTEREST") // "INTEREST" | "PRINCIPAL" | "BOTH"
+  paidAt      DateTime @default(now())
+  notes       String?
+}
+
+model NotificationLog {
+  id          String   @id @default(cuid())
+  borrowerId  String
+  borrower    Borrower @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  type        String   // "DUE_TOMORROW" | "DUE_TODAY" | "OVERDUE"
+  amountDue   Float
+  message     String
+  sentAt      DateTime @default(now())
+  isRead      Boolean  @default(false)
+}
