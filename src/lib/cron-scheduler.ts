@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { prisma } from './prisma';
 import { calculateMonthlyInterest, getDaysUntilDate, formatCurrency } from './calculator';
 
@@ -124,21 +123,27 @@ export async function runDailyReminderCheck(): Promise<ReminderRunResult> {
 // Global flag to prevent multiple cron instances
 const globalForCron = globalThis as unknown as { isCronInitialized?: boolean };
 
-export function initCronScheduler() {
-  if (globalForCron.isCronInitialized) {
+export async function initCronScheduler() {
+  // Disable node-cron inside Vercel or if already initialized
+  if (globalForCron.isCronInitialized || process.env.VERCEL) {
     return;
   }
 
-  // Schedule daily check at 08:00 AM every day
-  cron.schedule('0 8 * * *', async () => {
-    console.log('[CRON] 08:00 AM Daily Loan Payment Reminder Job Running...');
-    try {
-      await runDailyReminderCheck();
-    } catch (err) {
-      console.error('[CRON] Error during daily check:', err);
-    }
-  });
+  try {
+    const cron = (await import('node-cron')).default;
+    // Schedule daily check at 08:00 AM every day
+    cron.schedule('0 8 * * *', async () => {
+      console.log('[CRON] 08:00 AM Daily Loan Payment Reminder Job Running...');
+      try {
+        await runDailyReminderCheck();
+      } catch (err) {
+        console.error('[CRON] Error during daily check:', err);
+      }
+    });
 
-  globalForCron.isCronInitialized = true;
-  console.log('[CRON] Loan Reminder Scheduler initialized (08:00 AM daily).');
+    globalForCron.isCronInitialized = true;
+    console.log('[CRON] Loan Reminder Scheduler initialized (08:00 AM daily).');
+  } catch (err) {
+    console.warn('[CRON] Could not initialize local scheduler.', err);
+  }
 }
